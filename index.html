@@ -5,7 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Golazo · World Cup 2026 Lineups</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚽</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:ital,wght@0,500;0,600;0,700;0,800;1,800&display=swap" rel="stylesheet">
 <style>
+:root{--font-display:'Barlow Semi Condensed',system-ui,sans-serif;}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#f1f5f9;min-height:100vh;overflow:hidden;}
 
@@ -13,7 +17,7 @@ header{
   background:#1e293b;padding:12px 20px;display:flex;align-items:center;gap:12px;
   border-bottom:1px solid #334155;height:52px;flex-shrink:0;
 }
-header h1{font-size:1.1rem;font-weight:700;}
+header h1{font-family:var(--font-display);font-size:1.5rem;font-weight:800;font-style:italic;text-transform:uppercase;letter-spacing:.005em;line-height:1;}
 header h1 .g{color:#7bd957;}
 header .sub{color:#64748b;font-size:0.8rem;margin-top:1px;}
 
@@ -49,7 +53,7 @@ header .sub{color:#64748b;font-size:0.8rem;margin-top:1px;}
 
 /* ── Scorebar ── */
 .scorebar{display:flex;align-items:center;justify-content:center;gap:14px;background:#0f172a;border-bottom:1px solid #1e293b;padding:7px 14px;flex-shrink:0;}
-.sb-team{display:flex;align-items:center;gap:7px;font-weight:600;font-size:0.9rem;}
+.sb-team{display:flex;align-items:center;gap:7px;font-family:var(--font-display);font-weight:700;font-size:1.05rem;text-transform:uppercase;letter-spacing:.04em;}
 .sb-team img{width:22px;height:22px;object-fit:contain;}
 .sb-score{font-size:1.2rem;font-weight:800;letter-spacing:1px;min-width:54px;text-align:center;}
 .sb-status{font-size:0.74rem;font-weight:700;color:#22c55e;padding:2px 8px;border-radius:20px;background:rgba(34,197,94,.12);}
@@ -126,12 +130,15 @@ header .sub{color:#64748b;font-size:0.8rem;margin-top:1px;}
 .player-node.sel .pc{box-shadow:0 0 0 3px #fbbf24,0 4px 14px rgba(0,0,0,.5);background:#d97706 !important;}
 .player-node.sel .pc-shirt{filter:drop-shadow(0 0 0 #fbbf24) drop-shadow(0 0 4px #fbbf24);}
 .pn-label{
-  background:rgba(0,0,0,.72);color:#fff;font-size:0.62rem;font-weight:600;
-  padding:2px 5px;border-radius:3px;margin-top:2px;white-space:nowrap;
-  max-width:84px;overflow:hidden;text-overflow:ellipsis;pointer-events:none;
+  font-family:var(--font-display);background:rgba(7,12,24,.82);color:#fff;
+  font-size:0.74rem;font-weight:700;text-transform:uppercase;letter-spacing:.045em;line-height:1.12;
+  padding:2px 7px;border-radius:4px;margin-top:3px;white-space:nowrap;
+  max-width:98px;overflow:hidden;text-overflow:ellipsis;pointer-events:none;
+  box-shadow:0 1px 5px rgba(0,0,0,.45);
 }
-.pn-role{font-size:0.58rem;color:rgba(255,255,255,.6);background:rgba(0,0,0,.5);
-  padding:1px 3px;border-radius:2px;margin-top:1px;pointer-events:none;}
+.pn-role{font-family:var(--font-display);font-size:0.62rem;font-weight:600;
+  text-transform:uppercase;letter-spacing:.1em;color:rgba(255,255,255,.6);
+  background:rgba(0,0,0,.45);padding:1px 5px;border-radius:3px;margin-top:2px;pointer-events:none;}
 .pn-badges{position:absolute;top:-7px;right:-9px;display:flex;gap:1px;pointer-events:none;}
 .pn-badges span{font-size:0.6rem;line-height:1.25;background:rgba(0,0,0,.65);border-radius:4px;padding:0 2px;}
 
@@ -168,8 +175,8 @@ header .sub{color:#64748b;font-size:0.8rem;margin-top:1px;}
   /* Smaller pitch nodes so 5-across formations don't crowd on a phone */
   .pc{width:30px;height:30px;font-size:0.68rem;}
   .pc-shirt{width:38px;height:38px;}
-  .pn-label{font-size:0.55rem;max-width:62px;padding:1px 4px;}
-  .pn-role{font-size:0.5rem;}
+  .pn-label{font-size:0.64rem;max-width:72px;padding:1px 5px;}
+  .pn-role{font-size:0.54rem;}
 }
 </style>
 </head>
@@ -725,6 +732,11 @@ function roundRect(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo
 
 async function exportPNG(){
   const W=760,H=1140,sx=W/400,sy=H/600;
+  // ensure the broadcast font is ready so the shared image renders in it, not a fallback
+  try{ await Promise.all([
+    document.fonts.load("700 14px 'Barlow Semi Condensed'"),
+    document.fonts.load("800 18px 'Barlow Semi Condensed'"),
+  ]); }catch(e){}
   const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
   const ctx=cv.getContext('2d');
   drawPitchCanvas(ctx,W,H,sx,sy);
@@ -784,11 +796,14 @@ function drawPlayerCanvas(ctx,W,H,t,p,xp,yp,img){
     ctx.lineWidth=2; ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.stroke();
     ctx.font='bold 15px system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillStyle='#fff'; ctx.fillText(p.jersey,px,py);
   }
-  // name label
-  const name=p.short||p.name; ctx.font='600 13px system-ui';
-  const tw=ctx.measureText(name).width, ly=py+R+11;
-  ctx.fillStyle='rgba(0,0,0,.72)'; roundRect(ctx,px-tw/2-5,ly-9,tw+10,18,4); ctx.fill();
+  // name label — broadcast nameplate
+  const name=(p.short||p.name||'').toUpperCase();
+  ctx.font="700 15px 'Barlow Semi Condensed', system-ui"; ctx.textAlign='center';
+  if('letterSpacing' in ctx) ctx.letterSpacing='0.6px';
+  const tw=ctx.measureText(name).width, ly=py+R+12;
+  ctx.fillStyle='rgba(7,12,24,.82)'; roundRect(ctx,px-tw/2-7,ly-10,tw+14,20,5); ctx.fill();
   ctx.fillStyle='#fff'; ctx.textBaseline='middle'; ctx.fillText(name,px,ly);
+  if('letterSpacing' in ctx) ctx.letterSpacing='0px';
   // markers
   ctx.font='13px system-ui'; ctx.textAlign='left';
   let m=''; if(p.goals>0) m+='⚽'+(p.goals>1?p.goals:''); if(p.red>0) m+='🟥'; else if(p.yellow>0) m+='🟨';
@@ -796,16 +811,20 @@ function drawPlayerCanvas(ctx,W,H,t,p,xp,yp,img){
 }
 
 function drawTitleCanvas(ctx,W){
-  ctx.fillStyle='rgba(15,23,42,.85)'; ctx.fillRect(0,0,W,32);
-  ctx.fillStyle='#fff'; ctx.font='bold 15px system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillStyle='rgba(15,23,42,.9)'; ctx.fillRect(0,0,W,34);
+  ctx.fillStyle='#7bd957'; ctx.fillRect(0,0,4,34); // accent edge
+  ctx.fillStyle='#fff'; ctx.font="800 18px 'Barlow Semi Condensed', system-ui";
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  if('letterSpacing' in ctx) ctx.letterSpacing='0.5px';
   let txt;
   if(S.bothView){
-    const sc=(S.score[0]!==''&&S.score[1]!=='')?`  ${S.score[0]}–${S.score[1]}  `:'  vs  ';
+    const sc=(S.score[0]!==''&&S.score[1]!=='')?`  ${S.score[0]}–${S.score[1]}  `:'  VS  ';
     txt=`${S.homeTeam}${sc}${S.awayTeam}`;
   } else {
     const t=S.activeTeam; txt=`${t===0?S.homeTeam:S.awayTeam}  ·  ${S.teamFormation[t]}`;
   }
-  ctx.fillText(txt,W/2,16);
+  ctx.fillText(txt.toUpperCase(),W/2,17);
+  if('letterSpacing' in ctx) ctx.letterSpacing='0px';
 }
 
 // ── MANUAL ENTRY ──────────────────────────────────────────────────────────
