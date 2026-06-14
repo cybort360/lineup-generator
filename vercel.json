@@ -1,6 +1,0 @@
-{
-  "cleanUrls": true,
-  "rewrites": [
-    { "source": "/", "destination": "/wc2026-lineup-editor.html" }
-  ]
-}

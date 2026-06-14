@@ -26,9 +26,9 @@ over HTTP (opening the file directly with `file://` will not work):
 python3 -m http.server 8000
 ```
 
-Then open <http://localhost:8000/wc2026-lineup-editor.html>.
+Then open <http://localhost:8000>.
 
 ## Files
 
-- `wc2026-lineup-editor.html` — the entire app
+- `index.html` — the entire app
 - `golazo-logo.png` — watermark logo
