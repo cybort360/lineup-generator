@@ -122,7 +122,6 @@ header .sub{color:#64748b;font-size:0.8rem;margin-top:1px;}
 .pc-shirt{width:46px;height:46px;position:relative;display:flex;align-items:center;justify-content:center;
   transition:transform .12s;filter:drop-shadow(0 2px 5px rgba(0,0,0,.55));}
 .pc-shirt img{width:100%;height:100%;object-fit:contain;pointer-events:none;}
-.pc-shirt .num{position:absolute;top:46%;left:50%;transform:translate(-50%,-50%);font-size:0.72rem;font-weight:800;color:#fff;text-shadow:0 1px 2px #000,0 0 3px rgba(0,0,0,.8);}
 .player-node:not(.static):hover .pc,.player-node:not(.static):hover .pc-shirt{transform:scale(1.13);}
 .player-node.sel .pc{box-shadow:0 0 0 3px #fbbf24,0 4px 14px rgba(0,0,0,.5);background:#d97706 !important;}
 .player-node.sel .pc-shirt{filter:drop-shadow(0 0 0 #fbbf24) drop-shadow(0 0 4px #fbbf24);}
@@ -169,7 +168,6 @@ header .sub{color:#64748b;font-size:0.8rem;margin-top:1px;}
   /* Smaller pitch nodes so 5-across formations don't crowd on a phone */
   .pc{width:30px;height:30px;font-size:0.68rem;}
   .pc-shirt{width:38px;height:38px;}
-  .pc-shirt .num{font-size:0.62rem;}
   .pn-label{font-size:0.55rem;max-width:62px;padding:1px 4px;}
   .pn-role{font-size:0.5rem;}
 }
@@ -527,8 +525,7 @@ function buildNode(t,i,x,y,interactive){
       const fb=document.createElement('div'); fb.className='pc'; fb.style.background=S.teamColor[t]||'#1d4ed8'; fb.textContent=p.jersey;
       pc.replaceWith(fb);
     };
-    const num=document.createElement('span'); num.className='num'; num.textContent=p.jersey;
-    pc.appendChild(im); pc.appendChild(num);
+    pc.appendChild(im); // jersey image already shows the number — no overlay needed
   } else {
     pc=document.createElement('div'); pc.className='pc'; pc.style.background=S.teamColor[t]||'#1d4ed8'; pc.textContent=p.jersey;
   }
@@ -781,10 +778,7 @@ function drawPitchCanvas(ctx,W,H,sx,sy){
 function drawPlayerCanvas(ctx,W,H,t,p,xp,yp,img){
   const px=xp/100*W, py=yp/100*H, R=27;
   if(img){
-    ctx.drawImage(img,px-R,py-R,R*2,R*2);
-    ctx.font='bold 15px system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.lineWidth=3; ctx.strokeStyle='rgba(0,0,0,.85)'; ctx.strokeText(p.jersey,px,py-1);
-    ctx.fillStyle='#fff'; ctx.fillText(p.jersey,px,py-1);
+    ctx.drawImage(img,px-R,py-R,R*2,R*2); // jersey image already shows the number
   } else {
     ctx.beginPath(); ctx.arc(px,py,R*0.74,0,7); ctx.fillStyle=S.teamColor[t]||'#1d4ed8'; ctx.fill();
     ctx.lineWidth=2; ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.stroke();
