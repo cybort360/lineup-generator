@@ -142,8 +142,12 @@ header .sub{color:#64748b;font-size:0.8rem;margin-top:1px;}
 .pn-badges{position:absolute;top:-7px;right:-9px;display:flex;gap:1px;pointer-events:none;}
 .pn-badges span{font-size:0.6rem;line-height:1.25;background:rgba(0,0,0,.65);border-radius:4px;padding:0 2px;}
 
-/* ── Flanking team panels (both-teams view): Lineup / Subs / Manager ── */
+/* ── Flanking team panels (both-teams view): Lineup / Substitutions ── */
 .pitch-area.both{gap:12px;}
+/* Horizontal both-view: wide pitch on top, panels side-by-side below (scrolls) */
+.pitch-area.both.horiz{flex-direction:column;align-items:center;justify-content:flex-start;overflow:auto;gap:10px;}
+.panel-row{display:flex;gap:12px;width:100%;justify-content:center;align-items:flex-start;}
+.pitch-area.both.horiz .lineup-panel{height:auto;max-height:340px;flex:1;max-width:420px;}
 .lineup-panel{width:205px;flex-shrink:0;height:100%;background:#1e293b;border:1px solid #334155;border-radius:10px;display:flex;flex-direction:column;overflow:hidden;}
 .lp-head{display:flex;align-items:center;gap:7px;padding:10px 11px;color:#fff;font-family:var(--font-display);font-weight:700;font-size:0.98rem;text-transform:uppercase;letter-spacing:.03em;}
 .lp-head img{width:18px;height:18px;object-fit:contain;flex-shrink:0;}
@@ -184,7 +188,6 @@ header .sub{color:#64748b;font-size:0.8rem;margin-top:1px;}
   /* Pitch fills the screen width; aspect-ratio drives its height */
   .main-panel{order:2;overflow:visible;}
   .pitch-area{padding:8px;min-height:0;overflow:visible;}
-  .pitch-field{height:auto !important;width:100% !important;}
 
   /* Toolbars wrap instead of overflowing */
   .team-bar{height:auto;flex-wrap:wrap;padding:6px 10px;gap:6px;}
@@ -231,6 +234,7 @@ header .sub{color:#64748b;font-size:0.8rem;margin-top:1px;}
       <div class="team-tab" data-team="1" id="tab-1">Away</div>
       <div class="bar-right">
         <button class="both-btn" id="both-toggle" onclick="toggleBoth()">Both teams</button>
+        <button class="both-btn" id="orient-toggle" onclick="flipOrient()">⤢ Rotate</button>
         <span>Formation:</span>
         <select id="fmn-select">
           <option value="4-3-3">4-3-3</option>
@@ -318,7 +322,7 @@ const S = {
   teamColorOverride:[null,null],
   selPlayer:null, selBench:null,
   dirty:[false,false],
-  bothView:false,
+  bothView:false, horizontal:false,
   pollTimer:null,
 };
 const BASE = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world';
@@ -541,6 +545,43 @@ function updateScorebar(){
     ${S.lastUpdate?`<div class="sb-updated">updated ${esc(S.lastUpdate)}</div>`:''}`;
 }
 
+// Rotate display coords for horizontal orientation (logical stays portrait).
+// CCW 90°: home (bottom) → left, away (top) → right.
+function orient(x,y){ return S.horizontal ? {x:100-y, y:x} : {x,y}; }
+function unorient(dx,dy){ return S.horizontal ? {x:dy, y:100-dx} : {x:dx, y:dy}; }
+
+function flipOrient(){
+  S.horizontal=!S.horizontal;
+  try{ localStorage.setItem('golazo_orient', S.horizontal?'h':'v'); }catch(e){}
+  syncOrientBtn();
+  renderPitch();
+}
+function syncOrientBtn(){
+  const b=document.getElementById('orient-toggle');
+  if(b){ b.classList.toggle('on',S.horizontal); b.textContent = S.horizontal?'⤢ Horizontal':'⤢ Vertical'; }
+}
+
+// Size the pitch to fit its area while preserving aspect ratio (panels accounted for)
+function layoutField(){
+  const field=document.querySelector('.pitch-field'); if(!field) return;
+  const pa=document.getElementById('pitch-area');
+  const cs=getComputedStyle(pa);
+  const padX=parseFloat(cs.paddingLeft)+parseFloat(cs.paddingRight);
+  const padY=parseFloat(cs.paddingTop)+parseFloat(cs.paddingBottom);
+  let availW=pa.clientWidth-padX, availH=pa.clientHeight-padY;
+  if(S.bothView && cs.flexDirection==='row'){          // panels sit beside the pitch
+    pa.querySelectorAll('.lineup-panel').forEach(p=>{ availW-=p.offsetWidth; });
+    availW-=24;                                         // the two flex gaps
+  }
+  const ar = S.horizontal ? 1.5 : (2/3);               // width / height
+  let w,h;
+  const mobile=window.matchMedia('(max-width:640px)').matches;
+  if(mobile || availH<120 || (S.bothView&&S.horizontal)){ w=availW; h=w/ar; }   // width drives height
+  else if(availW/availH > ar){ h=availH; w=h*ar; }     // height-limited
+  else { w=availW; h=w/ar; }                           // width-limited
+  field.style.width=w+'px'; field.style.height=h+'px';
+}
+
 // Map a team's pitch coords into the combined "both teams" view
 function placeCoord(t,x,y){
   if(!S.bothView) return {x,y};
@@ -555,7 +596,7 @@ function renderPitch(){
 
   const field=document.createElement('div');
   field.className='pitch-field';
-  field.style.cssText='position:relative;height:100%;aspect-ratio:2/3;max-width:100%;margin:0 auto;';
+  field.style.cssText='position:relative;margin:0 auto;flex-shrink:0;';   // size set by layoutField()
   field.appendChild(makePitchSVG());
 
   // Golazo watermark behind the players
@@ -569,13 +610,21 @@ function renderPitch(){
 
   pa.innerHTML='';
   pa.classList.toggle('both', S.bothView);
-  if(S.bothView){
+  pa.classList.toggle('horiz', S.horizontal);
+  if(S.bothView && S.horizontal){
+    // wide pitch on top, the two squad panels side-by-side below it
+    pa.appendChild(field);
+    const row=document.createElement('div'); row.className='panel-row';
+    row.appendChild(buildTeamPanel(0)); row.appendChild(buildTeamPanel(1));
+    pa.appendChild(row);
+  } else if(S.bothView){
     pa.appendChild(buildTeamPanel(0));   // home on the left
     pa.appendChild(field);
     pa.appendChild(buildTeamPanel(1));   // away on the right
   } else {
     pa.appendChild(field);
   }
+  layoutField();
 }
 
 // A flanking squad card: coloured header (+ colour picker), Lineup, Substitutions, Manager
@@ -617,7 +666,7 @@ function renderTeamNodes(field,t,interactive){
   computeLayout(players,S.teamFormation[t]).forEach(({idx:i,x,y})=>{
     const p=players[i];
     const fx=p.cx!=null?p.cx:x, fy=p.cy!=null?p.cy:y;
-    const c=placeCoord(t,fx,fy);
+    const pc=placeCoord(t,fx,fy), c=orient(pc.x,pc.y);
     field.appendChild(buildNode(t,i,c.x,c.y,interactive));
   });
 }
@@ -684,7 +733,7 @@ function attachDrag(node,t,i){
       node.removeEventListener('pointermove',move);
       node.removeEventListener('pointerup',up);
       node.classList.remove('dragging');
-      if(moved){ S.starters[t][i].cx=nx; S.starters[t][i].cy=ny; markDirty(t); }
+      if(moved){ const u=unorient(nx,ny); S.starters[t][i].cx=u.x; S.starters[t][i].cy=u.y; markDirty(t); }
       else selectPlayer(i);
     };
     node.addEventListener('pointermove',move);
@@ -693,17 +742,21 @@ function attachDrag(node,t,i){
 }
 
 function makePitchSVG(){
-  const NS='http://www.w3.org/2000/svg';
+  const NS='http://www.w3.org/2000/svg', horiz=S.horizontal;
   const svg=document.createElementNS(NS,'svg');
-  svg.setAttribute('viewBox','0 0 400 600');
+  svg.setAttribute('viewBox', horiz?'0 0 600 400':'0 0 400 600');
   svg.setAttribute('preserveAspectRatio','none');
   svg.style.cssText='position:absolute;inset:0;width:100%;height:100%;';
-  r(svg,0,0,400,600,'#276334');
-  for(let i=0;i<8;i++) if(i%2===0) r(svg,0,i*75,400,75,'rgba(255,255,255,.03)');
+  // transform logical portrait coords (400×600) into the current orientation
+  const T=(x,y)=> horiz ? [600-y, x] : [x, y];
   const lc='rgba(255,255,255,.55)', sw='1.5';
-  const ln=(x1,y1,x2,y2)=>{const e=document.createElementNS(NS,'line');e.setAttribute('x1',x1);e.setAttribute('y1',y1);e.setAttribute('x2',x2);e.setAttribute('y2',y2);e.setAttribute('stroke',lc);e.setAttribute('stroke-width',sw);svg.appendChild(e);};
-  const ci=(cx,cy,radius)=>{const e=document.createElementNS(NS,'circle');e.setAttribute('cx',cx);e.setAttribute('cy',cy);e.setAttribute('r',radius);e.setAttribute('fill','none');e.setAttribute('stroke',lc);e.setAttribute('stroke-width',sw);svg.appendChild(e);};
-  const dot=(cx,cy)=>{const e=document.createElementNS(NS,'circle');e.setAttribute('cx',cx);e.setAttribute('cy',cy);e.setAttribute('r',3);e.setAttribute('fill',lc);svg.appendChild(e);};
+  const ln=(x1,y1,x2,y2)=>{const a=T(x1,y1),b=T(x2,y2);const e=document.createElementNS(NS,'line');e.setAttribute('x1',a[0]);e.setAttribute('y1',a[1]);e.setAttribute('x2',b[0]);e.setAttribute('y2',b[1]);e.setAttribute('stroke',lc);e.setAttribute('stroke-width',sw);svg.appendChild(e);};
+  const ci=(cx,cy,radius)=>{const a=T(cx,cy);const e=document.createElementNS(NS,'circle');e.setAttribute('cx',a[0]);e.setAttribute('cy',a[1]);e.setAttribute('r',radius);e.setAttribute('fill','none');e.setAttribute('stroke',lc);e.setAttribute('stroke-width',sw);svg.appendChild(e);};
+  const dot=(cx,cy)=>{const a=T(cx,cy);const e=document.createElementNS(NS,'circle');e.setAttribute('cx',a[0]);e.setAttribute('cy',a[1]);e.setAttribute('r',3);e.setAttribute('fill',lc);svg.appendChild(e);};
+  const rect=(x,y,w,h,fill)=>{const a=T(x,y),b=T(x+w,y+h);r(Math.min(a[0],b[0]),Math.min(a[1],b[1]),Math.abs(b[0]-a[0]),Math.abs(b[1]-a[1]),fill);};
+  // background + mown stripes (bands run across the long axis)
+  rect(0,0,400,600,'#276334');
+  for(let i=0;i<8;i++) if(i%2===0) rect(0,i*75,400,75,'rgba(255,255,255,.03)');
   ln(20,20,380,20);ln(20,20,20,580);ln(380,20,380,580);ln(20,580,380,580);
   ln(20,300,380,300);
   ci(200,300,60);dot(200,300);
@@ -711,10 +764,10 @@ function makePitchSVG(){
   ln(148,20,148,52);ln(252,20,252,52);ln(148,52,252,52);dot(200,70);
   ln(100,490,100,580);ln(300,490,300,580);ln(100,490,300,490);
   ln(148,548,148,580);ln(252,548,252,580);ln(148,548,252,548);dot(200,530);
-  r(svg,170,8,60,12,'rgba(255,255,255,.15)');
-  r(svg,170,580,60,12,'rgba(255,255,255,.15)');
+  rect(170,8,60,12,'rgba(255,255,255,.15)');
+  rect(170,580,60,12,'rgba(255,255,255,.15)');
   return svg;
-  function r(parent,x,y,w,h,fill){const e=document.createElementNS(NS,'rect');e.setAttribute('x',x);e.setAttribute('y',y);e.setAttribute('width',w);e.setAttribute('height',h);e.setAttribute('fill',fill);parent.appendChild(e);}
+  function r(x,y,w,h,fill){const e=document.createElementNS(NS,'rect');e.setAttribute('x',x);e.setAttribute('y',y);e.setAttribute('width',w);e.setAttribute('height',h);e.setAttribute('fill',fill);svg.appendChild(e);}
 }
 
 function renderBench(){
@@ -837,17 +890,17 @@ function loadImg(src){ return new Promise(res=>{ const im=new Image(); im.crossO
 function roundRect(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
 
 async function exportPNG(){
-  const W=760,H=1140,sx=W/400,sy=H/600;
+  const W=S.horizontal?1140:760, H=S.horizontal?760:1140;   // pitch canvas matches orientation
   // ensure the broadcast font is ready so the shared image renders in it, not a fallback
   try{ await Promise.all([
     document.fonts.load("700 14px 'Barlow Semi Condensed'"),
     document.fonts.load("800 18px 'Barlow Semi Condensed'"),
   ]); }catch(e){}
 
-  // Draw the pitch + players onto its own canvas (untouched coordinate math)
+  // Draw the pitch + players onto its own canvas
   const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
   const ctx=cv.getContext('2d');
-  drawPitchCanvas(ctx,W,H,sx,sy);
+  drawPitchCanvas(ctx,W,H);
 
   const teams=S.bothView?[0,1]:[S.activeTeam];
   const srcs=new Set(); teams.forEach(t=>S.starters[t].forEach(p=>{ if(p.img) srcs.add(p.img); }));
@@ -865,7 +918,7 @@ async function exportPNG(){
     computeLayout(players,S.teamFormation[t]).forEach(({idx:i,x,y})=>{
       const p=players[i];
       const fx=p.cx!=null?p.cx:x, fy=p.cy!=null?p.cy:y;
-      const c=placeCoord(t,fx,fy);
+      const pc=placeCoord(t,fx,fy), c=orient(pc.x,pc.y);
       drawPlayerCanvas(ctx,W,H,t,p,c.x,c.y,imgs[p.img]);
     });
   }
@@ -927,20 +980,30 @@ function drawPanelCanvas(ctx,x0,w,h,t,right){
   }
 }
 
-function drawPitchCanvas(ctx,W,H,sx,sy){
+function drawPitchCanvas(ctx,W,H){
+  const horiz=S.horizontal;
+  // logical portrait 400×600 → canvas (oriented), plus radius scaling per axis
+  const T=(x,y)=> horiz ? [(600-y)/600*W, x/400*H] : [x/400*W, y/600*H];
+  const rad=(r)=> horiz ? [r/600*W, r/400*H] : [r/400*W, r/600*H];
   ctx.fillStyle='#276334'; ctx.fillRect(0,0,W,H);
-  for(let i=0;i<8;i++) if(i%2===0){ ctx.fillStyle='rgba(255,255,255,.03)'; ctx.fillRect(0,i*75*sy,W,75*sy); }
+  ctx.fillStyle='rgba(255,255,255,.03)';
+  for(let i=0;i<8;i++) if(i%2===0){
+    if(horiz) ctx.fillRect(i*75/600*W,0,75/600*W,H);
+    else      ctx.fillRect(0,i*75/600*H,W,75/600*H);
+  }
   ctx.strokeStyle='rgba(255,255,255,.55)'; ctx.lineWidth=1.5; ctx.fillStyle='rgba(255,255,255,.55)';
-  const ln=(x1,y1,x2,y2)=>{ctx.beginPath();ctx.moveTo(x1*sx,y1*sy);ctx.lineTo(x2*sx,y2*sy);ctx.stroke();};
-  const dot=(x,y)=>{ctx.beginPath();ctx.arc(x*sx,y*sy,3*sx,0,7);ctx.fill();};
+  const ln=(x1,y1,x2,y2)=>{const a=T(x1,y1),b=T(x2,y2);ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke();};
+  const dot=(x,y)=>{const a=T(x,y),rr=rad(3);ctx.beginPath();ctx.ellipse(a[0],a[1],rr[0],rr[1],0,0,7);ctx.fill();};
+  const ci=(x,y,r)=>{const a=T(x,y),rr=rad(r);ctx.beginPath();ctx.ellipse(a[0],a[1],rr[0],rr[1],0,0,7);ctx.stroke();};
+  const rect=(x,y,w,h)=>{const a=T(x,y),b=T(x+w,y+h);ctx.fillRect(Math.min(a[0],b[0]),Math.min(a[1],b[1]),Math.abs(b[0]-a[0]),Math.abs(b[1]-a[1]));};
   ln(20,20,380,20);ln(20,20,20,580);ln(380,20,380,580);ln(20,580,380,580);
   ln(20,300,380,300);
-  ctx.beginPath(); ctx.ellipse(200*sx,300*sy,60*sx,60*sy,0,0,7); ctx.stroke(); dot(200,300);
+  ci(200,300,60); dot(200,300);
   ln(100,20,100,110);ln(300,20,300,110);ln(100,110,300,110);
   ln(148,20,148,52);ln(252,20,252,52);ln(148,52,252,52);dot(200,70);
   ln(100,490,100,580);ln(300,490,300,580);ln(100,490,300,490);
   ln(148,548,148,580);ln(252,548,252,580);ln(148,548,252,548);dot(200,530);
-  ctx.fillStyle='rgba(255,255,255,.15)'; ctx.fillRect(170*sx,8*sy,60*sx,12*sy); ctx.fillRect(170*sx,580*sy,60*sx,12*sy);
+  ctx.fillStyle='rgba(255,255,255,.15)'; rect(170,8,60,12); rect(170,580,60,12);
 }
 
 function drawPlayerCanvas(ctx,W,H,t,p,xp,yp,img){
@@ -1137,7 +1200,12 @@ document.getElementById('fmn-select').addEventListener('change',e=>{
   renderPitch();
 });
 
+// Keep the pitch fitted to its area on viewport changes
+let _resizeT; window.addEventListener('resize',()=>{ clearTimeout(_resizeT); _resizeT=setTimeout(layoutField,120); });
+
 // ── INIT ──────────────────────────────────────────────────────────────────
+try{ S.horizontal = localStorage.getItem('golazo_orient')==='h'; }catch(e){}
+syncOrientBtn();
 fetchMatches();
 </script>
 </body>
