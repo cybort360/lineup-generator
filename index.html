@@ -142,8 +142,32 @@ header .sub{color:#64748b;font-size:0.8rem;margin-top:1px;}
 .pn-badges{position:absolute;top:-7px;right:-9px;display:flex;gap:1px;pointer-events:none;}
 .pn-badges span{font-size:0.6rem;line-height:1.25;background:rgba(0,0,0,.65);border-radius:4px;padding:0 2px;}
 
+/* ── Flanking team panels (both-teams view): Lineup / Subs / Manager ── */
+.pitch-area.both{gap:12px;}
+.lineup-panel{width:205px;flex-shrink:0;height:100%;background:#1e293b;border:1px solid #334155;border-radius:10px;display:flex;flex-direction:column;overflow:hidden;}
+.lp-head{display:flex;align-items:center;gap:7px;padding:10px 11px;color:#fff;font-family:var(--font-display);font-weight:700;font-size:0.98rem;text-transform:uppercase;letter-spacing:.03em;}
+.lp-head img{width:18px;height:18px;object-fit:contain;flex-shrink:0;}
+.lp-head .lp-team{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.lp-color{width:22px;height:22px;border:1px solid rgba(255,255,255,.5);background:none;padding:0;cursor:pointer;border-radius:5px;flex-shrink:0;}
+.lineup-panel.right .lp-head{flex-direction:row-reverse;}
+.lineup-panel.right .lp-head .lp-team{text-align:right;}
+.lp-body{flex:1;overflow-y:auto;padding:4px 11px 12px;}
+.lp-section{font-size:0.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.13em;color:#64748b;margin:12px 0 5px;}
+.lineup-panel.right .lp-section{text-align:right;}
+.lp-row{display:flex;align-items:center;gap:9px;padding:2px 0;}
+.lineup-panel.right .lp-row{flex-direction:row-reverse;}
+.lp-num{min-width:20px;text-align:center;color:#94a3b8;font-weight:700;font-size:0.72rem;flex-shrink:0;}
+.lp-name{flex:1;min-width:0;font-family:var(--font-display);font-weight:600;font-size:0.82rem;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.lineup-panel.right .lp-name{text-align:right;}
+
 @media(max-width:880px){
   .match-panel{width:210px;} .right-panel{width:210px;}
+  .lineup-panel{width:170px;}
+}
+@media(max-width:760px){
+  .pitch-area.both{flex-direction:column;align-items:stretch;}
+  .lineup-panel{width:100%;height:auto;}
+  .lp-body{max-height:300px;}
 }
 @media(max-width:640px){
   html,body{overflow:auto;-webkit-text-size-adjust:100%;}
@@ -291,6 +315,7 @@ const S = {
   starters:[[],[]], bench:[[],[]], orig:[[],[]],
   activeTeam:0,
   teamFormation:['4-3-3','4-3-3'], formation:'4-3-3',
+  teamColorOverride:[null,null],
   selPlayer:null, selBench:null,
   dirty:[false,false],
   bothView:false,
@@ -356,6 +381,39 @@ function teamColor(c,def){
   const r=parseInt(col.slice(0,2),16),g=parseInt(col.slice(2,4),16),b=parseInt(col.slice(4,6),16);
   const lum=0.299*r+0.587*g+0.114*b;
   return (lum>210||lum<25)?def:'#'+col;   // avoid near-white / near-black
+}
+// Single source of truth for a team's colour: manual override beats ESPN's beats default
+function teamCol(t){ return S.teamColorOverride[t] || S.teamColor[t] || (t===0?'#1d4ed8':'#be123c'); }
+// Hue (0–360) of a #rrggbb colour
+function hueOf(hex){
+  hex=(hex||'').replace('#',''); if(hex.length!==6) return 0;
+  const r=parseInt(hex.slice(0,2),16)/255,g=parseInt(hex.slice(2,4),16)/255,b=parseInt(hex.slice(4,6),16)/255;
+  const mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn;
+  if(!d) return 0;
+  let h = mx===r ? ((g-b)/d)%6 : mx===g ? (b-r)/d+2 : (r-g)/d+4;
+  h*=60; return h<0?h+360:h;
+}
+// When a team's colour is overridden, recolour its real jersey photos toward that colour
+// by hue-rotating away from ESPN's (kit-matching) base colour. Empty string = leave as-is.
+function kitFilter(t){
+  const ov=S.teamColorOverride[t]; if(!ov) return '';
+  let d=Math.round(hueOf(ov)-hueOf(S.teamColor[t]||ov));
+  d=((d%360)+540)%360-180;                 // shortest rotation, -180..180
+  return Math.abs(d)<8 ? '' : `hue-rotate(${d}deg) saturate(1.15)`;
+}
+// Distinct away-kit options, used when two teams' colours clash
+const KIT_PALETTE=['#1d4ed8','#15803d','#a21caf','#ea580c','#0891b2','#ca8a04','#e11d48'];
+function hueGap(a,b){ const d=Math.abs(hueOf(a)-hueOf(b)); return Math.min(d,360-d); }
+// If the two teams' kit colours are too similar, auto-recolour the away side to a contrasting kit.
+// Never overrides a colour the user (or a saved edit) has already set.
+function autoFixClash(){
+  if(S.teamColorOverride[0]||S.teamColorOverride[1]) return;     // respect manual / restored choices
+  const home=S.teamColor[0], away=S.teamColor[1];
+  if(!home||!away) return;
+  if(hueGap(home,away)>=35) return;                              // already distinguishable
+  let best=KIT_PALETTE[0], bestGap=-1;                           // pick the palette colour furthest from home
+  for(const c of KIT_PALETTE){ const g=hueGap(c,home); if(g>bestGap){ bestGap=g; best=c; } }
+  S.teamColorOverride[1]=best;
 }
 
 function processData(data,{silent=false}={}){
@@ -432,7 +490,9 @@ function processData(data,{silent=false}={}){
           S.dirty[t]=true;
         }
       }
+      if(saved.colorOverride) S.teamColorOverride=saved.colorOverride;   // match-level extra
     }
+    autoFixClash();   // recolour the away kit if it clashes with home (unless user/saved override)
     document.getElementById('team-bar').style.display='flex';
     document.getElementById('action-bar').style.display='flex';
   }
@@ -447,10 +507,11 @@ function processData(data,{silent=false}={}){
 
 // ── PERSISTENCE ─────────────────────────────────────────────────────────────
 function markDirty(t){ S.dirty[t]=true; saveEdits(); updateHint(); }
+function hasCustom(){ return S.dirty[0]||S.dirty[1]||S.teamColorOverride[0]||S.teamColorOverride[1]; }
 function saveEdits(){
   try{
-    if(S.matchId && (S.dirty[0]||S.dirty[1]))
-      localStorage.setItem(KEY(S.matchId), JSON.stringify({starters:S.starters,bench:S.bench,teamFormation:S.teamFormation,dirty:S.dirty}));
+    if(S.matchId && hasCustom())
+      localStorage.setItem(KEY(S.matchId), JSON.stringify({starters:S.starters,bench:S.bench,teamFormation:S.teamFormation,dirty:S.dirty,colorOverride:S.teamColorOverride}));
     else if(S.matchId) localStorage.removeItem(KEY(S.matchId));
   }catch(e){}
 }
@@ -505,8 +566,51 @@ function renderPitch(){
 
   const teams = S.bothView ? [0,1] : [S.activeTeam];
   teams.forEach(t=>renderTeamNodes(field,t,!S.bothView));
-  pa.innerHTML=''; pa.appendChild(field);
+
+  pa.innerHTML='';
+  pa.classList.toggle('both', S.bothView);
+  if(S.bothView){
+    pa.appendChild(buildTeamPanel(0));   // home on the left
+    pa.appendChild(field);
+    pa.appendChild(buildTeamPanel(1));   // away on the right
+  } else {
+    pa.appendChild(field);
+  }
 }
+
+// A flanking squad card: coloured header (+ colour picker), Lineup, Substitutions, Manager
+function buildTeamPanel(t){
+  const wrap=document.createElement('div');
+  wrap.className='lineup-panel'+(t===1?' right':'');
+
+  const head=document.createElement('div');
+  head.className='lp-head'; head.style.background=teamCol(t);
+  if(S.teamLogo[t]){ const im=document.createElement('img'); im.src=S.teamLogo[t]; im.alt=''; head.appendChild(im); }
+  const nm=document.createElement('span'); nm.className='lp-team'; nm.textContent=t===0?S.homeTeam:S.awayTeam; head.appendChild(nm);
+  const pick=document.createElement('input');
+  pick.type='color'; pick.className='lp-color'; pick.value=normHex(teamCol(t)); pick.title='Change team colour (fixes kit clashes)';
+  pick.oninput=()=>{ S.teamColorOverride[t]=pick.value; saveEdits(); renderPitch(); };
+  head.appendChild(pick);
+  wrap.appendChild(head);
+
+  const body=document.createElement('div'); body.className='lp-body';
+  body.appendChild(panelSection('Lineup'));
+  (S.starters[t]||[]).forEach(p=>body.appendChild(panelRow(t,p)));
+  const bench=S.bench[t]||[];
+  if(bench.length){ body.appendChild(panelSection('Substitutions')); bench.forEach(p=>body.appendChild(panelRow(t,p))); }
+  wrap.appendChild(body);
+  return wrap;
+}
+function panelSection(txt){ const d=document.createElement('div'); d.className='lp-section'; d.textContent=txt; return d; }
+function panelRow(t,p){
+  const row=document.createElement('div'); row.className='lp-row';
+  const num=document.createElement('span'); num.className='lp-num'; num.textContent=p.jersey;
+  const name=document.createElement('span'); name.className='lp-name'; name.textContent=p.short||p.name; name.title=p.name;
+  row.appendChild(num); row.appendChild(name);   // CSS row-reverse mirrors the right panel
+  return row;
+}
+// <input type=color> demands a 7-char #rrggbb; coerce anything else to a safe default
+function normHex(c){ return /^#[0-9a-f]{6}$/i.test(c||'') ? c : '#1d4ed8'; }
 
 function renderTeamNodes(field,t,interactive){
   const players=S.starters[t]; if(!players||!players.length) return;
@@ -528,13 +632,14 @@ function buildNode(t,i,x,y,interactive){
   if(p.img){
     pc=document.createElement('div'); pc.className='pc-shirt';
     const im=document.createElement('img'); im.src=p.img; im.crossOrigin='anonymous'; im.alt='';
+    im.style.filter=kitFilter(t);   // recolour the shirt if this team's colour was changed
     im.onerror=()=>{ // fall back to a coloured circle if the jersey image fails
-      const fb=document.createElement('div'); fb.className='pc'; fb.style.background=S.teamColor[t]||'#1d4ed8'; fb.textContent=p.jersey;
+      const fb=document.createElement('div'); fb.className='pc'; fb.style.background=teamCol(t); fb.textContent=p.jersey;
       pc.replaceWith(fb);
     };
     pc.appendChild(im); // jersey image already shows the number — no overlay needed
   } else {
-    pc=document.createElement('div'); pc.className='pc'; pc.style.background=S.teamColor[t]||'#1d4ed8'; pc.textContent=p.jersey;
+    pc=document.createElement('div'); pc.className='pc'; pc.style.background=teamCol(t); pc.textContent=p.jersey;
   }
   node.appendChild(pc);
 
@@ -629,6 +734,7 @@ function selectMatch(id){
   document.querySelectorAll('.match-card').forEach(c=>c.classList.remove('active'));
   document.getElementById('mc-'+id)?.classList.add('active');
   S.matchId=id; S.selPlayer=null; S.selBench=null; S.dirty=[false,false];
+  S.teamColorOverride=[null,null];
   document.getElementById('edit-section').style.display='none';
   fetchLineup(id).then(startPolling);
 }
@@ -737,6 +843,8 @@ async function exportPNG(){
     document.fonts.load("700 14px 'Barlow Semi Condensed'"),
     document.fonts.load("800 18px 'Barlow Semi Condensed'"),
   ]); }catch(e){}
+
+  // Draw the pitch + players onto its own canvas (untouched coordinate math)
   const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
   const ctx=cv.getContext('2d');
   drawPitchCanvas(ctx,W,H,sx,sy);
@@ -763,12 +871,60 @@ async function exportPNG(){
   }
   drawTitleCanvas(ctx,W);
 
-  cv.toBlob(b=>{
+  // In both-teams view, composite the pitch between two squad panels (Lineup/Subs/Manager)
+  let out=cv;
+  if(S.bothView){
+    const PW=320, OW=PW*2+W, OH=H;
+    out=document.createElement('canvas'); out.width=OW; out.height=OH;
+    const o=out.getContext('2d');
+    o.fillStyle='#0f172a'; o.fillRect(0,0,OW,OH);
+    o.drawImage(cv,PW,0);
+    drawPanelCanvas(o,0,PW,OH,0,false);        // home, left, left-aligned
+    drawPanelCanvas(o,PW+W,PW,OH,1,true);      // away, right, right-aligned
+  }
+
+  out.toBlob(b=>{
     if(!b){ alert('Export failed (image security). Try again.'); return; }
     const team=S.bothView?'match':(S.activeTeam===0?S.homeTeam:S.awayTeam);
     const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(b),download:`${String(team).replace(/\s/g,'-')}-lineup.png`});
     a.click(); URL.revokeObjectURL(a.href);
   },'image/png');
+}
+
+// Draw one team's squad panel onto the export canvas, scaling line-height to fit the column
+function drawPanelCanvas(ctx,x0,w,h,t,right){
+  const col=teamCol(t), pad=20, headH=66;
+  ctx.fillStyle=col; ctx.fillRect(x0,0,w,headH);
+  ctx.fillStyle='#fff'; ctx.font="800 24px 'Barlow Semi Condensed', system-ui";
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText((t===0?S.homeTeam:S.awayTeam).toUpperCase(), x0+w/2, headH/2, w-pad*2);
+
+  const lines=[{s:'LINEUP'}];
+  (S.starters[t]||[]).forEach(p=>lines.push({n:p.jersey,name:p.short||p.name}));
+  const bench=S.bench[t]||[];
+  if(bench.length){ lines.push({s:'SUBSTITUTIONS'}); bench.forEach(p=>lines.push({n:p.jersey,name:p.short||p.name})); }
+
+  const top=headH+16, avail=h-top-16;
+  const lh=Math.max(20,Math.min(40,avail/lines.length));
+  const fs=Math.max(12,Math.min(17,lh*0.6));
+  const lx=x0+pad, rx=x0+w-pad, numW=28, edge=right?rx:lx, nameMax=w-pad*2-numW;
+  let y=top+lh/2;
+  ctx.textBaseline='middle';
+  for(const L of lines){
+    ctx.textAlign=right?'right':'left';
+    if(L.s){
+      ctx.fillStyle='#64748b'; ctx.font=`700 ${Math.round(fs*0.78)}px 'Barlow Semi Condensed', system-ui`;
+      if('letterSpacing' in ctx) ctx.letterSpacing='1.2px';
+      ctx.fillText(L.s,edge,y,w-pad*2);
+      if('letterSpacing' in ctx) ctx.letterSpacing='0px';
+    } else {
+      ctx.fillStyle='#94a3b8'; ctx.font=`700 ${Math.round(fs*0.84)}px 'Barlow Semi Condensed', system-ui`;
+      ctx.fillText(String(L.n),edge,y);
+      ctx.fillStyle='#f1f5f9'; ctx.font=`600 ${fs}px 'Barlow Semi Condensed', system-ui`;
+      ctx.fillText(L.name.toUpperCase(), right?rx-numW:lx+numW, y, nameMax);
+    }
+    y+=lh;
+  }
 }
 
 function drawPitchCanvas(ctx,W,H,sx,sy){
@@ -790,9 +946,12 @@ function drawPitchCanvas(ctx,W,H,sx,sy){
 function drawPlayerCanvas(ctx,W,H,t,p,xp,yp,img){
   const px=xp/100*W, py=yp/100*H, R=27;
   if(img){
+    const f=kitFilter(t);
+    if(f) ctx.filter=f;                                  // recolour shirt to match a changed team colour
     ctx.drawImage(img,px-R,py-R,R*2,R*2); // jersey image already shows the number
+    if(f) ctx.filter='none';
   } else {
-    ctx.beginPath(); ctx.arc(px,py,R*0.74,0,7); ctx.fillStyle=S.teamColor[t]||'#1d4ed8'; ctx.fill();
+    ctx.beginPath(); ctx.arc(px,py,R*0.74,0,7); ctx.fillStyle=teamCol(t); ctx.fill();
     ctx.lineWidth=2; ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.stroke();
     ctx.font='bold 15px system-ui'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillStyle='#fff'; ctx.fillText(p.jersey,px,py);
   }
@@ -840,6 +999,7 @@ function loadManual(){
   S.starters=[clone(def),clone(def)]; S.bench=[[],[]]; S.orig=[clone(def),clone(def)];
   S.homeTeam='Team A'; S.awayTeam='Team B'; S.teamAbbr=['TEAM A','TEAM B'];
   S.teamLogo=['','']; S.teamColor=['#1d4ed8','#be123c']; S.score=['','']; S.statusText=''; S.statusState='pre';
+  S.teamColorOverride=[null,null];
   S.dirty=[false,false]; S.bothView=false;
   document.getElementById('both-toggle').classList.remove('on');
   document.getElementById('tab-0').textContent='Team A';

@@ -7,7 +7,8 @@ A single self-contained HTML file — no build step, no dependencies.
 
 - **Real data, real formations** — pulls live rosters, formations, and player positions straight from ESPN
 - **Live score & clock** — auto-refreshes every 30s while a match is in play
-- **Both-teams view** — see both lineups facing off on one pitch
+- **Both-teams view** — see both lineups facing off on one pitch, with flanking squad panels (Lineup / Substitutions) for each side
+- **Kit-clash handling** — auto-recolours the away kit when both teams' colours are too similar, plus a per-team colour picker to recolour the shirts and panel headers manually
 - **Drag & drop** — reposition any player; edit name, number, and position
 - **Real player jerseys** and team flags/crests
 - **Goal / card / substitution markers** on the pitch
